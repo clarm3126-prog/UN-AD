@@ -152,6 +152,26 @@ python3 scripts/crawl_coupang_reviews.py \
 python3 scripts/crawl_coupang_reviews.py --max-reviews 200 --out data/source/reviews/coupang_reviews.csv
 ```
 
+## Docker 실행(권장)
+
+호스트에 Python/Playwright 라이브러리를 직접 깔지 않고 크롤러를 실행합니다.
+
+```bash
+scripts/run_crawler_docker.sh \
+  "https://www.coupang.com/vp/products/8671137454?vendorItemId=92174443576&sourceType=HOME_GW_PROMOTION&searchId=feed-c19a9e097ff24146acb28d491b18944b-3.33.107%3Agw_promotion" \
+  --max-reviews 200 \
+  --headless \
+  --out data/source/reviews/coupang_reviews_8671137454.csv
+```
+
+URL 인자를 생략하면 스크립트 기본 URL(위 상품)로 실행됩니다:
+
+```bash
+scripts/run_crawler_docker.sh --max-reviews 200 --headless --out data/source/reviews/coupang_reviews_8671137454.csv
+```
+
+## 로컬 Python 실행(대안)
+
 의존성:
 - `pip install playwright`
 - `python -m playwright install chromium`
