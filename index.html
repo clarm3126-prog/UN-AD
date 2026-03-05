@@ -1,14 +1,81 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hello World</title>
-  <link href='/style.css' rel='stylesheet'>
+  <title>UN-AD | 리뷰 정화 필터</title>
+  <link href="/style.css" rel="stylesheet" />
 </head>
 <body>
-  <h1>Hello, world!</h1>
-  <button onclick="console.log('hello');">Press me</button>
-  <script defer type="text/javascript" src="/main.js"></script>
+  <div class="bg-glow bg-glow-1" aria-hidden="true"></div>
+  <div class="bg-glow bg-glow-2" aria-hidden="true"></div>
+
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">UN-AD REVIEW FILTER</p>
+      <h1>광고성/가짜 리뷰를 걸러서<br/>실제 소비자 리뷰만 보세요</h1>
+      <p class="subtitle">
+        리뷰 문장을 넣으면 패턴 기반으로 의심 점수를 계산하고,
+        신뢰 가능한 리뷰만 분리해 보여줍니다.
+      </p>
+    </header>
+
+    <section class="panel input-panel">
+      <div class="panel-header">
+        <h2>리뷰 입력</h2>
+        <p>한 줄에 리뷰 1개씩 입력하세요.</p>
+      </div>
+
+      <textarea id="reviewInput" placeholder="예시) 배송은 느렸지만 포장은 꼼꼼했고, 일주일 사용해보니 소음이 생각보다 적었어요.\n\n예시) 체험단으로 받았는데 역대급! 무조건 사세요!!!"></textarea>
+
+      <div class="controls">
+        <label class="control">
+          <span>필터 강도</span>
+          <select id="strictness">
+            <option value="lenient">약하게</option>
+            <option value="normal" selected>보통</option>
+            <option value="strict">강하게</option>
+          </select>
+        </label>
+
+        <label class="checkbox-wrap">
+          <input type="checkbox" id="showOnlyReal" checked />
+          <span>실제 소비자 리뷰만 보기</span>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="demoBtn" class="btn ghost">데모 데이터</button>
+        <button id="clearBtn" class="btn ghost">초기화</button>
+        <button id="analyzeBtn" class="btn primary">리뷰 분석</button>
+      </div>
+    </section>
+
+    <section class="panel result-panel">
+      <div class="panel-header">
+        <h2>분석 결과</h2>
+        <p id="resultHint">아직 분석 전입니다.</p>
+      </div>
+
+      <div class="stat-grid" id="stats">
+        <article class="stat-card">
+          <p>전체 리뷰</p>
+          <strong id="totalCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <p>실제 소비자 추정</p>
+          <strong id="realCount">0</strong>
+        </article>
+        <article class="stat-card">
+          <p>광고/가짜 의심</p>
+          <strong id="fakeCount">0</strong>
+        </article>
+      </div>
+
+      <ul id="resultList" class="result-list"></ul>
+    </section>
+  </main>
+
+  <script defer src="/main.js"></script>
 </body>
 </html>
