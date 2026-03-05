@@ -127,3 +127,26 @@ npm run crawl:template -- "https://www.coupang.com/vp/products/..."
 ```
 
 출력 파일은 `data/source/reviews/crawl_<timestamp>.csv`로 저장됩니다.
+
+## Python 크롤러(리팩터링 버전)
+
+추가 스크립트: `scripts/crawl_coupang_reviews.py`
+
+특징:
+- 리뷰 중복 제거(`review_id` 우선, 없으면 해시)
+- 더보기 + 스크롤 루프로 점진 수집
+- CSV/XLSX 출력 지원
+
+예시:
+
+```bash
+python3 scripts/crawl_coupang_reviews.py \
+  "https://www.coupang.com/vp/products/131023672?itemId=362266710&vendorItemId=4279191312" \
+  --max-reviews 200 \
+  --out data/source/reviews/coupang_reviews.csv
+```
+
+의존성:
+- `pip install playwright`
+- `python -m playwright install chromium`
+- (xlsx 저장 시) `pip install pandas openpyxl`
