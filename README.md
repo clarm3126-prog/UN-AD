@@ -30,6 +30,7 @@ npm start
 - `GET /products/:id/reviews?label=real&limit=50`
 - `POST /ingestion/run` (body: `{ "source": "csv|coupang|all" }`)
 - `POST /insights/from-link` (body: `{ "url": "https://www.coupang.com/..." }`)
+- `POST /insights/from-csv` (body: `{ "csvText": "<csv-content>" }`)
 - `POST /reviews/:id/feedback`
 
 `/insights/from-link`는 아래를 한 번에 수행합니다.
@@ -37,6 +38,11 @@ npm start
 2. 해당 상품 리뷰 자동 수집(Coupang adapter)
 3. 큐 워커 자동 분석
 4. `1~2점` 리뷰만 모아 단점 요약 반환
+
+`/insights/from-csv`는 아래를 한 번에 수행합니다.
+1. CSV 리뷰 적재
+2. 큐 워커 자동 분석
+3. 상품별 `1~2점` 리뷰 단점 요약
 
 ## 수집 소스 어댑터
 

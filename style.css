@@ -62,21 +62,35 @@ body {
   font-weight: 700;
 }
 
+.upload-row {
+  display: flex;
+  gap: 8px;
+}
+
 .link-row {
   display: flex;
   gap: 8px;
 }
 
+input[type="file"],
 input[type="url"] {
   flex: 1;
   border: 1px solid #cabfae;
   border-radius: 12px;
   padding: 12px;
   font: inherit;
+  background: #fff;
 }
 
+input[type="file"]:focus,
 input[type="url"]:focus {
   outline: 2px solid #8ecdbd;
+}
+
+.help-text {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .actions {
@@ -187,6 +201,7 @@ input[type="url"]:focus {
 }
 
 @media (max-width: 760px) {
+  .upload-row,
   .link-row { flex-direction: column; }
   .stat-grid { grid-template-columns: 1fr; }
 }

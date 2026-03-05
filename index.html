@@ -9,10 +9,19 @@
 <body>
   <main class="app">
     <header class="hero">
-      <p class="eyebrow">UN-AD LINK INSIGHT</p>
-      <h1>쿠팡 링크 붙여넣기만 하면<br/>1~2점 리뷰 단점만 요약</h1>
-      <p class="subtitle">상품 링크를 넣으면 저평점 리뷰를 자동 수집/분석해서 구매 전 확인해야 할 단점만 정리해줍니다.</p>
+      <p class="eyebrow">UN-AD REVIEW INSIGHT</p>
+      <h1>CSV 업로드로 대량 리뷰 자동 분석<br/>1~2점 단점만 요약</h1>
+      <p class="subtitle">리뷰 CSV를 올리면 상품별 저평점(1~2점) 리뷰를 자동 분류해 구매 전 꼭 봐야 할 단점만 정리합니다.</p>
     </header>
+
+    <section class="panel input-panel">
+      <label for="csvFile" class="input-label">리뷰 CSV 업로드</label>
+      <div class="upload-row">
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+        <button id="uploadBtn" class="btn primary">CSV 자동 분석</button>
+      </div>
+      <p class="help-text">필수 컬럼: <code>product_id,rating,review_text</code> (권장: <code>product_name,review_id,created_at</code>)</p>
+    </section>
 
     <section class="panel input-panel">
       <label for="productLink" class="input-label">쿠팡 상품 링크</label>
@@ -22,6 +31,7 @@
       </div>
       <div class="actions">
         <button id="demoBtn" class="btn ghost">데모 링크</button>
+        <button id="demoCsvBtn" class="btn ghost">데모 CSV</button>
         <span id="statusText" class="status">대기 중</span>
       </div>
     </section>
@@ -34,11 +44,11 @@
 
       <div class="stat-grid">
         <article class="stat-card">
-          <p>상품 ID</p>
+          <p>대표 상품 ID</p>
           <strong id="productId">-</strong>
         </article>
         <article class="stat-card">
-          <p>1~2점 리뷰 수</p>
+          <p>대표 상품 1~2점 리뷰 수</p>
           <strong id="lowCount">0</strong>
         </article>
         <article class="stat-card">
