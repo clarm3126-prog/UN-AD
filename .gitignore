@@ -8,3 +8,4 @@ data/runtime/
 .env
 __pycache__/
 *.pyc
+.venv/
