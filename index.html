@@ -15,12 +15,12 @@
     </header>
 
     <section class="panel input-panel">
-      <label for="csvFile" class="input-label">리뷰 CSV 업로드</label>
+      <label for="csvFile" class="input-label">리뷰 파일 업로드</label>
       <div class="upload-row">
-        <input id="csvFile" type="file" accept=".csv,text/csv" />
-        <button id="uploadBtn" class="btn primary">CSV 자동 분석</button>
+        <input id="csvFile" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        <button id="uploadBtn" class="btn primary">파일 자동 분석</button>
       </div>
-      <p class="help-text">필수 컬럼: <code>product_id,rating,review_text</code> (권장: <code>product_name,review_id,created_at</code>)</p>
+      <p class="help-text">CSV/XLSX 지원 · 필수 컬럼: <code>product_id,rating,review_text</code> (권장: <code>product_name,review_id,created_at</code>)</p>
     </section>
 
     <section class="panel input-panel">

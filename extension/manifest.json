@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "UN-AD Review Exporter",
+  "description": "현재 페이지에 보이는 리뷰를 CSV로 저장합니다.",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "downloads", "scripting"],
+  "host_permissions": ["https://*.coupang.com/*"],
+  "action": {
+    "default_title": "UN-AD Export",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.coupang.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

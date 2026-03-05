@@ -1,6 +1,6 @@
 # UN-AD
 
-대량 상품 리뷰를 자동 수집/필터링하고, 쿠팡 링크 기반으로 `1~2점 리뷰 단점 요약`을 제공하는 파이프라인입니다.
+대량 상품 리뷰를 자동 수집/필터링하고, 쿠팡 링크/CSV/XLSX 기반으로 `1~2점 리뷰 단점 요약`을 제공하는 파이프라인입니다.
 
 ## 구성
 
@@ -31,6 +31,7 @@ npm start
 - `POST /ingestion/run` (body: `{ "source": "csv|coupang|all" }`)
 - `POST /insights/from-link` (body: `{ "url": "https://www.coupang.com/..." }`)
 - `POST /insights/from-csv` (body: `{ "csvText": "<csv-content>" }`)
+- `POST /insights/from-upload` (body: `{ "fileName": "reviews.xlsx", "fileBase64": "..." }`)
 - `POST /reviews/:id/feedback`
 
 `/insights/from-link`는 아래를 한 번에 수행합니다.
@@ -43,6 +44,8 @@ npm start
 1. CSV 리뷰 적재
 2. 큐 워커 자동 분석
 3. 상품별 `1~2점` 리뷰 단점 요약
+
+`/insights/from-upload`는 CSV/XLSX 파일 업로드용 엔드포인트입니다.
 
 ## 수집 소스 어댑터
 
@@ -103,3 +106,24 @@ https://api-gateway.coupang.com/example/reviews?productId={productId}&vendorItem
 ```csv
 product_id,product_name,vendor_item_id,review_id,rating,created_at,review_text,source
 ```
+
+XLSX도 동일한 컬럼명을 사용하면 됩니다.
+
+## 브라우저 확장(반자동 수집)
+
+`extension/` 폴더를 크롬 확장으로 로드한 뒤, 쿠팡 상품 페이지에서 팝업 버튼을 눌러 현재 보이는 리뷰를 CSV로 저장할 수 있습니다.
+
+1. 크롬 `chrome://extensions` 이동
+2. `개발자 모드` ON
+3. `압축해제된 확장 프로그램 로드` -> `extension/` 선택
+4. 쿠팡 상품 페이지에서 `UN-AD Export` 클릭 -> `현재 페이지 리뷰 CSV 저장`
+
+## Playwright 수집 템플릿
+
+정책 허용 범위에서만 사용하세요.
+
+```bash
+npm run crawl:template -- "https://www.coupang.com/vp/products/..."
+```
+
+출력 파일은 `data/source/reviews/crawl_<timestamp>.csv`로 저장됩니다.

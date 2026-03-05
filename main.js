@@ -122,19 +122,29 @@ async function summarizeFromLink() {
 async function summarizeFromCsvUpload() {
   const file = csvFile.files && csvFile.files[0];
   if (!file) {
-    setStatus("CSV 파일을 선택하세요", "error");
+    setStatus("CSV/XLSX 파일을 선택하세요", "error");
     return;
   }
 
-  setStatus("CSV 업로드/분석 중...", "loading");
+  setStatus("파일 업로드/분석 중...", "loading");
   uploadBtn.disabled = true;
 
   try {
-    const csvText = await file.text();
-    const response = await fetch(`${getApiBase()}/insights/from-csv`, {
+    const ab = await file.arrayBuffer();
+    const bytes = new Uint8Array(ab);
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const fileBase64 = btoa(binary);
+
+    const response = await fetch(`${getApiBase()}/insights/from-upload`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csvText })
+      body: JSON.stringify({
+        fileName: file.name,
+        fileBase64
+      })
     });
 
     const payload = await response.json();

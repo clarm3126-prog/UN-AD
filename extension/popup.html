@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UN-AD Export</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 12px; width: 280px; }
+    button { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #ccc; cursor: pointer; }
+    .primary { background: #0a7a67; color: #fff; border-color: #0a7a67; }
+    .secondary { margin-top: 8px; background: #fff; }
+    .status { margin-top: 10px; color: #444; font-size: 12px; min-height: 18px; }
+    code { font-size: 11px; }
+  </style>
+</head>
+<body>
+  <button id="exportBtn" class="primary">현재 페이지 리뷰 CSV 저장</button>
+  <button id="copyBtn" class="secondary">JSON 복사</button>
+  <p class="status" id="status">대기 중</p>
+  <script src="popup.js"></script>
+</body>
+</html>

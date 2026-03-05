@@ -1,5 +1,11 @@
 const crypto = require("crypto");
 const http = require("http");
+let XLSX = null;
+try {
+  XLSX = require("xlsx");
+} catch (err) {
+  XLSX = null;
+}
 
 const {
   loadDb,
@@ -100,6 +106,44 @@ function parseCsvText(csvText) {
     });
     return row;
   });
+}
+
+function parseXlsxBuffer(buffer) {
+  if (!XLSX) {
+    throw new Error("xlsx 패키지가 필요합니다. npm i xlsx 실행 후 다시 시도하세요.");
+  }
+
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return [];
+  }
+
+  const sheet = workbook.Sheets[firstSheetName];
+  return XLSX.utils.sheet_to_json(sheet, { defval: "" });
+}
+
+function parseRowsFromUploadBody(body) {
+  const fileBase64 = String(body.fileBase64 || "").trim();
+  const fileName = String(body.fileName || "").trim().toLowerCase();
+  if (!fileBase64 || !fileName) {
+    throw new Error("fileName, fileBase64 필드는 필수입니다.");
+  }
+
+  const buffer = Buffer.from(fileBase64, "base64");
+  if (!buffer.length) {
+    throw new Error("업로드 파일이 비어 있습니다.");
+  }
+
+  if (fileName.endsWith(".csv")) {
+    return parseCsvText(buffer.toString("utf8"));
+  }
+
+  if (fileName.endsWith(".xlsx") || fileName.endsWith(".xls")) {
+    return parseXlsxBuffer(buffer);
+  }
+
+  throw new Error("지원하지 않는 파일 형식입니다. csv/xlsx만 지원합니다.");
 }
 
 function makeReviewId(productId, text, createdAt) {
@@ -309,6 +353,55 @@ function route(req, res) {
           },
           worker,
           primary,
+          products
+        };
+      })
+      .then((data) => {
+        sendJson(res, 200, { ok: true, data });
+      })
+      .catch((err) => {
+        sendJson(res, 400, { ok: false, error: err.message });
+      });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/insights/from-upload") {
+    parseBody(req)
+      .then(async (body) => {
+        const rows = parseRowsFromUploadBody(body);
+        if (!rows.length) {
+          throw new Error("파일 데이터가 비어 있습니다.");
+        }
+
+        const ingestion = ingestRowsIntoDb(rows, "file_upload");
+        const worker = processQueueOnce();
+        const db = loadDb();
+
+        const products = [];
+        for (const productId of ingestion.productIds) {
+          const allRows = getReviewsByProduct(db, productId, "all", 1000);
+          const lowRows = allRows.filter((row) => Number(row.rating || 0) > 0 && Number(row.rating || 0) <= 2);
+          const summary = await summarizeLowRatingReviews(lowRows);
+          products.push({
+            productId,
+            lowRatingCount: lowRows.length,
+            summary,
+            evidence: lowRows.slice(0, 15).map((row) => ({
+              reviewId: row.reviewId,
+              rating: row.rating,
+              text: row.rawText
+            }))
+          });
+        }
+
+        products.sort((a, b) => b.lowRatingCount - a.lowRatingCount);
+        return {
+          ingestion: {
+            scannedRows: rows.length,
+            ...ingestion
+          },
+          worker,
+          primary: products[0] || null,
           products
         };
       })
