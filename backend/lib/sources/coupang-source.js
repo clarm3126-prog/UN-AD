@@ -58,7 +58,22 @@ function parseProductsCsv(filePath) {
   }).filter((row) => row.productId);
 }
 
-function resolveProducts(db) {
+function normalizeTarget(target) {
+  return {
+    productId: String(target.productId || "").trim(),
+    productName: String(target.productName || ""),
+    vendorItemId: String(target.vendorItemId || ""),
+    vendorId: String(target.vendorId || "")
+  };
+}
+
+function resolveProducts(db, explicitTargets = []) {
+  if (Array.isArray(explicitTargets) && explicitTargets.length) {
+    return explicitTargets
+      .map(normalizeTarget)
+      .filter((row) => row.productId);
+  }
+
   const productsFile = process.env.COUPANG_PRODUCTS_FILE || DEFAULT_PRODUCTS_FILE;
   const fromFile = parseProductsCsv(productsFile);
   if (fromFile.length) {
@@ -248,8 +263,8 @@ function loadFromMock(products) {
   };
 }
 
-async function loadCoupangRows(db) {
-  const products = resolveProducts(db);
+async function loadCoupangRows(db, options = {}) {
+  const products = resolveProducts(db, options.targets || []);
   const mode = (process.env.COUPANG_SOURCE_MODE || "mock-file").toLowerCase();
 
   if (!products.length) {

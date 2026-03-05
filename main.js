@@ -1,207 +1,109 @@
-const reviewInput = document.getElementById("reviewInput");
-const strictness = document.getElementById("strictness");
-const showOnlyReal = document.getElementById("showOnlyReal");
-const analyzeBtn = document.getElementById("analyzeBtn");
+const productLink = document.getElementById("productLink");
+const summarizeBtn = document.getElementById("summarizeBtn");
 const demoBtn = document.getElementById("demoBtn");
-const clearBtn = document.getElementById("clearBtn");
+const statusText = document.getElementById("statusText");
 
-const totalCount = document.getElementById("totalCount");
-const realCount = document.getElementById("realCount");
-const fakeCount = document.getElementById("fakeCount");
+const summaryTitle = document.getElementById("summaryTitle");
 const resultHint = document.getElementById("resultHint");
-const resultList = document.getElementById("resultList");
+const productIdEl = document.getElementById("productId");
+const lowCountEl = document.getElementById("lowCount");
+const summaryModeEl = document.getElementById("summaryMode");
+const consList = document.getElementById("consList");
+const evidenceList = document.getElementById("evidenceList");
 
-const promoKeywords = [
-  "협찬", "체험단", "광고", "지원받아", "원고료", "제휴", "쿠폰", "할인코드",
-  "링크", "오픈채팅", "dm", "문의", "최저가 보장", "무조건 사세요", "강추"
-];
-
-const genericPhrases = [
-  "진짜 좋아요", "인생템", "역대급", "완전 추천", "꼭 사세요", "가성비 최고"
-];
-
-const practicalSignals = [
-  "일주일", "한달", "3일", "배송", "포장", "재구매", "소음", "내구성", "사이즈",
-  "단점", "아쉬운", "환불", "교환", "사용감", "설치", "세척"
-];
-
-const strictMap = {
-  strict: 35,
-  normal: 45,
-  lenient: 58,
-};
-
-let latestRows = [];
-
-function clamp(num, min, max) {
-  return Math.max(min, Math.min(max, num));
+function getApiBase() {
+  return `${window.location.protocol}//${window.location.hostname}:4000`;
 }
 
-function countMatchedKeywords(text, words) {
-  return words.filter((word) => text.includes(word)).length;
+function setStatus(text, kind = "idle") {
+  statusText.textContent = text;
+  statusText.dataset.kind = kind;
 }
 
-function analyzeReview(rawText, level) {
-  const text = rawText.trim();
-  const reasons = [];
-  let suspiciousScore = 0;
-
-  if (!text) {
-    return {
-      text,
-      suspiciousScore: 100,
-      trustScore: 0,
-      reasons: ["빈 리뷰"],
-      isReal: false,
-    };
-  }
-
-  if (/https?:\/\/|www\.|open\.kakao|bit\.ly/i.test(text)) {
-    suspiciousScore += 35;
-    reasons.push("외부 링크/유도 문구");
-  }
-
-  const promoHits = countMatchedKeywords(text, promoKeywords);
-  if (promoHits > 0) {
-    suspiciousScore += Math.min(40, promoHits * 12);
-    reasons.push("광고성 키워드 포함");
-  }
-
-  const genericHits = countMatchedKeywords(text, genericPhrases);
-  if (genericHits > 0) {
-    suspiciousScore += Math.min(20, genericHits * 8);
-    reasons.push("과장/템플릿 문장 패턴");
-  }
-
-  if (/!{3,}|ㅋ{4,}|ㅎ{4,}|\?{3,}/.test(text)) {
-    suspiciousScore += 10;
-    reasons.push("과도한 강조 표현");
-  }
-
-  if (text.length < 14) {
-    suspiciousScore += 18;
-    reasons.push("정보량이 매우 적음");
-  }
-
-  const practicalHits = countMatchedKeywords(text, practicalSignals);
-  if (practicalHits > 0) {
-    suspiciousScore -= Math.min(24, practicalHits * 6);
-    reasons.push("실사용 정황 단서");
-  }
-
-  if (/아쉬|단점|별로|재구매는 고민|배송이 늦|불편/.test(text)) {
-    suspiciousScore -= 8;
-    reasons.push("긍/부정 균형 표현");
-  }
-
-  if (/^[\p{L}\p{N}\s.,!?~'"()\-]+$/u === false) {
-    suspiciousScore += 5;
-  }
-
-  suspiciousScore = clamp(Math.round(suspiciousScore), 0, 100);
-  const threshold = strictMap[level] ?? strictMap.normal;
-
-  return {
-    text,
-    suspiciousScore,
-    trustScore: 100 - suspiciousScore,
-    reasons: reasons.length ? reasons : ["뚜렷한 광고 패턴 미탐지"],
-    isReal: suspiciousScore < threshold,
-  };
-}
-
-function parseRows(value) {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-function renderRows(rows) {
-  const filteredRows = showOnlyReal.checked ? rows.filter((row) => row.isReal) : rows;
-
-  resultList.innerHTML = "";
-
-  if (!filteredRows.length) {
-    const empty = document.createElement("li");
-    empty.className = "review-card";
-    empty.textContent = "표시할 리뷰가 없습니다. (필터 조건을 확인하세요)";
-    resultList.appendChild(empty);
+function renderList(container, rows, emptyText) {
+  container.innerHTML = "";
+  if (!rows.length) {
+    const li = document.createElement("li");
+    li.className = "empty-item";
+    li.textContent = emptyText;
+    container.appendChild(li);
     return;
   }
 
-  filteredRows.forEach((row, idx) => {
-    const item = document.createElement("li");
-    item.className = `review-card ${row.isReal ? "safe" : "danger"}`;
-
-    const reasons = row.reasons
-      .map((reason) => `<span class="reason">${reason}</span>`)
-      .join("");
-
-    item.innerHTML = `
-      <div class="review-head">
-        <span class="badge ${row.isReal ? "safe" : "danger"}">
-          ${row.isReal ? "실제 소비자 추정" : "광고/가짜 의심"}
-        </span>
-        <span class="score">의심 점수 ${row.suspiciousScore} / 100</span>
-      </div>
-      <p class="review-text">${idx + 1}. ${row.text}</p>
-      <div class="reasons">${reasons}</div>
-    `;
-
-    resultList.appendChild(item);
+  rows.forEach((row) => {
+    const li = document.createElement("li");
+    li.textContent = row;
+    container.appendChild(li);
   });
 }
 
-function updateStats(rows) {
-  const real = rows.filter((row) => row.isReal).length;
-  const fake = rows.length - real;
-
-  totalCount.textContent = String(rows.length);
-  realCount.textContent = String(real);
-  fakeCount.textContent = String(fake);
-}
-
-function runAnalysis() {
-  const rows = parseRows(reviewInput.value);
-
+function renderEvidence(rows) {
+  evidenceList.innerHTML = "";
   if (!rows.length) {
-    latestRows = [];
-    updateStats([]);
-    resultHint.textContent = "리뷰를 입력한 뒤 분석을 눌러주세요.";
-    renderRows([]);
+    const li = document.createElement("li");
+    li.className = "empty-item";
+    li.textContent = "근거 리뷰가 없습니다.";
+    evidenceList.appendChild(li);
     return;
   }
 
-  latestRows = rows.map((text) => analyzeReview(text, strictness.value));
-  updateStats(latestRows);
-  resultHint.textContent = `분석 완료: ${latestRows.length}개 리뷰`;
-  renderRows(latestRows);
+  rows.forEach((row) => {
+    const li = document.createElement("li");
+    li.className = "evidence-item";
+    li.innerHTML = `
+      <p class="evidence-head">평점 ${row.rating}점 · ${row.reviewId}</p>
+      <p class="evidence-text">${row.text}</p>
+    `;
+    evidenceList.appendChild(li);
+  });
+}
+
+async function summarizeFromLink() {
+  const url = productLink.value.trim();
+  if (!url) {
+    setStatus("링크를 입력하세요", "error");
+    return;
+  }
+
+  setStatus("수집/분석 중...", "loading");
+  summarizeBtn.disabled = true;
+
+  try {
+    const response = await fetch(`${getApiBase()}/insights/from-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+
+    const payload = await response.json();
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || "요약 중 오류가 발생했습니다.");
+    }
+
+    const data = payload.data;
+    summaryTitle.textContent = data.summary.summaryTitle || "이 제품 사기 전 꼭 봐야 할 단점";
+    resultHint.textContent = `자동 수집/분석 완료 · 저평점 리뷰 ${data.lowRatingCount}개 기준`;
+    productIdEl.textContent = data.product.productId || "-";
+    lowCountEl.textContent = String(data.lowRatingCount || 0);
+    summaryModeEl.textContent = data.summary.mode || "-";
+
+    renderList(
+      consList,
+      data.summary.mustKnowCons || [],
+      "요약할 단점이 아직 없습니다."
+    );
+
+    renderEvidence(data.evidence || []);
+    setStatus("완료", "success");
+  } catch (err) {
+    setStatus(err.message, "error");
+  } finally {
+    summarizeBtn.disabled = false;
+  }
 }
 
 demoBtn.addEventListener("click", () => {
-  reviewInput.value = [
-    "체험단으로 제품 제공받아 작성합니다. 링크 타고 사면 쿠폰 줌! 무조건 사세요!!!",
-    "배송은 하루 늦었지만 설치는 10분 정도 걸렸고 소음이 생각보다 적었습니다.",
-    "가성비 최고 인생템 진짜 좋아요",
-    "한달 사용 기준으로 세척이 쉬운 편인데 뚜껑 결합부는 조금 헐거워졌어요.",
-    "문의는 오픈채팅으로 주세요. 최저가 보장합니다."
-  ].join("\n");
-  runAnalysis();
+  productLink.value = "https://www.coupang.com/vp/products/131023672?itemId=362266710&vendorItemId=4279191312";
 });
 
-clearBtn.addEventListener("click", () => {
-  reviewInput.value = "";
-  latestRows = [];
-  updateStats([]);
-  resultHint.textContent = "아직 분석 전입니다.";
-  resultList.innerHTML = "";
-});
-
-analyzeBtn.addEventListener("click", runAnalysis);
-strictness.addEventListener("change", () => {
-  if (latestRows.length) {
-    runAnalysis();
-  }
-});
-showOnlyReal.addEventListener("change", () => renderRows(latestRows));
+summarizeBtn.addEventListener("click", summarizeFromLink);

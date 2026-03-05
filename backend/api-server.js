@@ -8,6 +8,11 @@ const {
   getProductStats
 } = require("./lib/store");
 const { runIngestion } = require("./lib/ingestion-runner");
+const { processQueueOnce } = require("./lib/worker-runner");
+const {
+  extractCoupangTargetFromUrl,
+  summarizeLowRatingReviews
+} = require("./lib/link-insights");
 
 const PORT = Number(process.env.API_PORT || 4000);
 
@@ -91,6 +96,51 @@ function route(req, res) {
       .then((body) => runIngestion({ source: body.source || "csv" }))
       .then((summary) => {
         sendJson(res, 200, { ok: true, data: summary });
+      })
+      .catch((err) => {
+        sendJson(res, 400, { ok: false, error: err.message });
+      });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/insights/from-link") {
+    parseBody(req)
+      .then(async (body) => {
+        const link = String(body.url || "").trim();
+        if (!link) {
+          throw new Error("url 필드는 필수입니다.");
+        }
+
+        const target = extractCoupangTargetFromUrl(link);
+        const ingestion = await runIngestion({
+          source: "coupang",
+          productTargets: [target]
+        });
+        const worker = processQueueOnce();
+
+        const db = loadDb();
+        const allRows = getReviewsByProduct(db, target.productId, "all", 500);
+        const lowRows = allRows.filter((row) => Number(row.rating || 0) > 0 && Number(row.rating || 0) <= 2);
+        const summary = await summarizeLowRatingReviews(lowRows);
+
+        return {
+          product: {
+            productId: target.productId,
+            vendorItemId: target.vendorItemId
+          },
+          ingestion,
+          worker,
+          lowRatingCount: lowRows.length,
+          summary,
+          evidence: lowRows.slice(0, 15).map((row) => ({
+            reviewId: row.reviewId,
+            rating: row.rating,
+            text: row.rawText
+          }))
+        };
+      })
+      .then((data) => {
+        sendJson(res, 200, { ok: true, data });
       })
       .catch((err) => {
         sendJson(res, 400, { ok: false, error: err.message });

@@ -1,6 +1,6 @@
 # UN-AD
 
-대량 상품 리뷰를 자동 수집/필터링하기 위한 파이프라인 구조입니다.
+대량 상품 리뷰를 자동 수집/필터링하고, 쿠팡 링크 기반으로 `1~2점 리뷰 단점 요약`을 제공하는 파이프라인입니다.
 
 ## 구성
 
@@ -29,7 +29,14 @@ npm start
 - `GET /products/:id/stats`
 - `GET /products/:id/reviews?label=real&limit=50`
 - `POST /ingestion/run` (body: `{ "source": "csv|coupang|all" }`)
+- `POST /insights/from-link` (body: `{ "url": "https://www.coupang.com/..." }`)
 - `POST /reviews/:id/feedback`
+
+`/insights/from-link`는 아래를 한 번에 수행합니다.
+1. 링크에서 상품 ID 추출
+2. 해당 상품 리뷰 자동 수집(Coupang adapter)
+3. 큐 워커 자동 분석
+4. `1~2점` 리뷰만 모아 단점 요약 반환
 
 ## 수집 소스 어댑터
 

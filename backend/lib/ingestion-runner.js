@@ -107,8 +107,8 @@ async function runCsvSource(db) {
   };
 }
 
-async function runCoupangSource(db) {
-  const cp = await loadCoupangRows(db);
+async function runCoupangSource(db, options = {}) {
+  const cp = await loadCoupangRows(db, { targets: options.productTargets || [] });
   const result = ingestRows(db, cp.rows);
 
   db.ingestionState.lastCoupangRunAt = new Date().toISOString();
@@ -137,7 +137,7 @@ async function runIngestion(options = {}) {
   }
 
   if (source === "coupang" || source === "all") {
-    summaries.push(await runCoupangSource(db));
+    summaries.push(await runCoupangSource(db, options));
   }
 
   saveDb(db);
