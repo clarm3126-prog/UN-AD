@@ -146,6 +146,12 @@ python3 scripts/crawl_coupang_reviews.py \
   --out data/source/reviews/coupang_reviews.csv
 ```
 
+주신 URL(기본값 내장)로 실행:
+
+```bash
+python3 scripts/crawl_coupang_reviews.py --max-reviews 200 --out data/source/reviews/coupang_reviews.csv
+```
+
 의존성:
 - `pip install playwright`
 - `python -m playwright install chromium`

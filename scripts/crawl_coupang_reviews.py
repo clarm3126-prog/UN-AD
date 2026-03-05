@@ -10,8 +10,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from playwright.sync_api import TimeoutError as PWTimeoutError
-from playwright.sync_api import sync_playwright
+DEFAULT_PRODUCT_URL = (
+    "https://www.coupang.com/vp/products/8671137454"
+    "?vendorItemId=92174443576&sourceType=HOME_GW_PROMOTION"
+    "&searchId=feed-c19a9e097ff24146acb28d491b18944b-3.33.107%3Agw_promotion"
+)
 
 
 @dataclass
@@ -95,6 +98,148 @@ def _build_review_row(raw: Dict[str, object], product_id: str, product_name: str
     )
 
 
+def _click_first_visible(page, selectors: List[str], delay_sec: float) -> bool:
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            if loc.count() > 0 and loc.is_visible():
+                loc.click()
+                time.sleep(delay_sec)
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _open_review_section(page, delay_sec: float) -> None:
+    # 상단 탭/앵커로 리뷰 영역 진입 시도
+    opened = _click_first_visible(
+        page,
+        [
+            "a:has-text('상품평')",
+            "button:has-text('상품평')",
+            "a:has-text('리뷰')",
+            "button:has-text('리뷰')",
+            "[href*='sdpReview']",
+            "text=상품평",
+            "text=리뷰",
+        ],
+        delay_sec,
+    )
+
+    if not opened:
+        # 탭 클릭 실패 시 리뷰 섹션까지 스크롤 유도
+        for _ in range(6):
+            page.mouse.wheel(0, 1800)
+            time.sleep(delay_sec * 0.7)
+            if page.locator("[class*='sdp-review']").count() > 0:
+                break
+
+
+def _set_low_rating_sort(page, delay_sec: float) -> None:
+    # 1~2점 중심 분석을 위해 낮은 평점순 정렬 시도(없으면 그대로 진행)
+    _click_first_visible(
+        page,
+        [
+            "button:has-text('낮은 평점순')",
+            "a:has-text('낮은 평점순')",
+            "button:has-text('별점 낮은순')",
+            "button:has-text('별점낮은순')",
+            "li:has-text('낮은 평점순')",
+        ],
+        delay_sec,
+    )
+
+
+def _extract_rows_from_dom(page) -> List[Dict[str, object]]:
+    return page.evaluate(
+        """
+        () => {
+          const pickText = (root, selectors) => {
+            for (const s of selectors) {
+              const n = root.querySelector(s);
+              if (n && n.textContent) {
+                const t = n.textContent.trim();
+                if (t) return t;
+              }
+            }
+            return "";
+          };
+
+          const cardSelectors = [
+            "[data-review-id]",
+            "article.sdp-review__article__list__item",
+            ".sdp-review__article__list__item",
+            ".review__article",
+            ".js_reviewArticle"
+          ];
+
+          const seen = new Set();
+          const cards = [];
+          for (const sel of cardSelectors) {
+            const nodes = document.querySelectorAll(sel);
+            for (const n of nodes) {
+              if (!seen.has(n)) {
+                seen.add(n);
+                cards.push(n);
+              }
+            }
+          }
+
+          return cards.map((card) => {
+            const reviewId =
+              card.getAttribute("data-review-id") ||
+              card.getAttribute("data-id") ||
+              card.id || "";
+
+            const rating = pickText(card, [
+              "[aria-label*='별점']",
+              "[class*='rating']",
+              "[data-rating]",
+              ".sdp-review__article__list__info__product-info__star-orange",
+              ".sdp-review__article__list__info__product-info__star"
+            ]);
+
+            const createdAt = pickText(card, [
+              "time",
+              "[class*='reg-date']",
+              "[class*='date']",
+              "[data-created-at]"
+            ]);
+
+            const option = pickText(card, [
+              "[class*='option']",
+              ".sdp-review__article__list__info__product-info__name",
+              "[class*='product-info'] [class*='name']"
+            ]);
+
+            const reviewText = pickText(card, [
+              ".sdp-review__article__list__review__content",
+              "[class*='review__content']",
+              "[class*='review-content']",
+              "[class*='content']"
+            ]);
+
+            const helpful = pickText(card, [
+              "button:has-text('도움')",
+              "span:has-text('도움')",
+              "[class*='helpful']"
+            ]);
+
+            return {
+              review_id: reviewId,
+              rating,
+              created_at: createdAt,
+              option,
+              review_text: reviewText,
+              helpful
+            };
+          });
+        }
+        """
+    )
+
+
 def crawl_coupang_reviews(
     product_url: str,
     max_reviews: int,
@@ -102,6 +247,14 @@ def crawl_coupang_reviews(
     delay_sec: float,
     max_rounds: int,
 ) -> List[ReviewRow]:
+    try:
+        from playwright.sync_api import TimeoutError as PWTimeoutError  # type: ignore
+        from playwright.sync_api import sync_playwright  # type: ignore
+    except Exception as exc:
+        raise RuntimeError(
+            "playwright 패키지가 필요합니다. pip install playwright && python -m playwright install chromium"
+        ) from exc
+
     product_id = _extract_product_id(product_url)
     seen_keys = set()
     rows: List[ReviewRow] = []
@@ -125,111 +278,13 @@ def crawl_coupang_reviews(
 
         product_name = _normalize_space(page.locator("h1").first.inner_text()) if page.locator("h1").count() else ""
 
-        review_tab_candidates = [
-            "a:has-text('상품평')",
-            "button:has-text('상품평')",
-            "a:has-text('리뷰')",
-            "button:has-text('리뷰')",
-            "text=상품평",
-            "text=리뷰",
-        ]
-        for sel in review_tab_candidates:
-            try:
-                loc = page.locator(sel).first
-                if loc.count() > 0 and loc.is_visible():
-                    loc.click()
-                    time.sleep(delay_sec)
-                    break
-            except Exception:
-                continue
+        _open_review_section(page, delay_sec)
+        _set_low_rating_sort(page, delay_sec)
 
         idle_rounds = 0
 
         for _ in range(max_rounds):
-            extracted = page.evaluate(
-                """
-                () => {
-                  const pickText = (root, selectors) => {
-                    for (const s of selectors) {
-                      const n = root.querySelector(s);
-                      if (n && n.textContent) {
-                        const t = n.textContent.trim();
-                        if (t) return t;
-                      }
-                    }
-                    return "";
-                  };
-
-                  const cardSelectors = [
-                    "[data-review-id]",
-                    ".sdp-review__article__list__item",
-                    "article.sdp-review__article__list__item",
-                    ".review__article",
-                    ".js_reviewArticle"
-                  ];
-
-                  const seen = new Set();
-                  const cards = [];
-                  for (const sel of cardSelectors) {
-                    const nodes = document.querySelectorAll(sel);
-                    for (const n of nodes) {
-                      if (!seen.has(n)) {
-                        seen.add(n);
-                        cards.push(n);
-                      }
-                    }
-                  }
-
-                  return cards.map((card) => {
-                    const reviewId =
-                      card.getAttribute("data-review-id") ||
-                      card.getAttribute("data-id") ||
-                      card.id || "";
-
-                    const rating = pickText(card, [
-                      "[aria-label*='별점']",
-                      "[class*='rating']",
-                      "[data-rating]",
-                      ".sdp-review__article__list__info__product-info__star-orange"
-                    ]);
-
-                    const createdAt = pickText(card, [
-                      "time",
-                      "[class*='reg-date']",
-                      "[class*='date']",
-                      "[data-created-at]"
-                    ]);
-
-                    const option = pickText(card, [
-                      "[class*='option']",
-                      "[class*='product-info'] [class*='name']"
-                    ]);
-
-                    const reviewText = pickText(card, [
-                      ".sdp-review__article__list__review__content",
-                      "[class*='review__content']",
-                      "[class*='review-content']",
-                      "[class*='content']"
-                    ]);
-
-                    const helpful = pickText(card, [
-                      "button:has-text('도움')",
-                      "span:has-text('도움')",
-                      "[class*='helpful']"
-                    ]);
-
-                    return {
-                      review_id: reviewId,
-                      rating,
-                      created_at: createdAt,
-                      option,
-                      review_text: reviewText,
-                      helpful
-                    };
-                  });
-                }
-                """
-            )
+            extracted = _extract_rows_from_dom(page)
 
             new_count = 0
             for raw in extracted:
@@ -257,6 +312,8 @@ def crawl_coupang_reviews(
 
             clicked_more = False
             for sel in [
+                "button.sdp-review__article__page__next",
+                ".sdp-review__article__page__next",
                 "button:has-text('더보기')",
                 "a:has-text('더보기')",
                 "button:has-text('상품평 더보기')",
@@ -321,7 +378,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Coupang product review crawler template (use only where allowed by policy/terms)."
     )
-    parser.add_argument("url", help="쿠팡 상품 URL")
+    parser.add_argument("url", nargs="?", default=DEFAULT_PRODUCT_URL, help="쿠팡 상품 URL")
     parser.add_argument("--max-reviews", type=int, default=150)
     parser.add_argument("--headless", action="store_true", default=False)
     parser.add_argument("--delay-sec", type=float, default=1.0)
