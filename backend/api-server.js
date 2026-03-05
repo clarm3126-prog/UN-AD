@@ -87,8 +87,14 @@ function route(req, res) {
   }
 
   if (req.method === "POST" && pathname === "/ingestion/run") {
-    const summary = runIngestion();
-    sendJson(res, 200, { ok: true, data: summary });
+    parseBody(req)
+      .then((body) => runIngestion({ source: body.source || "csv" }))
+      .then((summary) => {
+        sendJson(res, 200, { ok: true, data: summary });
+      })
+      .catch((err) => {
+        sendJson(res, 400, { ok: false, error: err.message });
+      });
     return;
   }
 

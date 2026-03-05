@@ -1,5 +1,3 @@
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 
 const {
@@ -9,52 +7,8 @@ const {
   insertReview
 } = require("./store");
 const { enqueue } = require("./queue");
-
-const SOURCE_DIR = path.join(__dirname, "../../data/source/reviews");
-
-function parseCsvLine(line) {
-  const out = [];
-  let cur = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        cur += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === "," && !inQuotes) {
-      out.push(cur);
-      cur = "";
-    } else {
-      cur += ch;
-    }
-  }
-
-  out.push(cur);
-  return out.map((v) => v.trim());
-}
-
-function parseCsvFile(filePath) {
-  const raw = fs.readFileSync(filePath, "utf8");
-  const lines = raw.split("\n").map((line) => line.trim()).filter(Boolean);
-  if (!lines.length) {
-    return [];
-  }
-
-  const header = parseCsvLine(lines[0]);
-  return lines.slice(1).map((line) => {
-    const values = parseCsvLine(line);
-    const row = {};
-    header.forEach((key, idx) => {
-      row[key] = values[idx] || "";
-    });
-    return row;
-  });
-}
+const { loadCsvRows } = require("./sources/csv-source");
+const { loadCoupangRows } = require("./sources/coupang-source");
 
 function makeReviewId(productId, text, createdAt) {
   const digest = crypto
@@ -64,86 +18,139 @@ function makeReviewId(productId, text, createdAt) {
   return `rv_${digest.slice(0, 16)}`;
 }
 
-function ensureSourceDir() {
-  if (!fs.existsSync(SOURCE_DIR)) {
-    fs.mkdirSync(SOURCE_DIR, { recursive: true });
+function normalizeIncomingRow(row) {
+  const productId = String(row.product_id || row.productId || "");
+  const productName = row.product_name || row.productName || `product-${productId}`;
+  const vendorItemId = String(row.vendor_item_id || row.vendorItemId || "");
+  const source = row.source || "unknown";
+  const createdAt = row.created_at || row.createdAt || new Date().toISOString();
+  const reviewText = row.review_text || row.reviewText || "";
+
+  if (!productId || !reviewText.trim()) {
+    return null;
   }
+
+  const reviewId = row.review_id || row.reviewId || makeReviewId(productId, reviewText, createdAt);
+
+  return {
+    product: {
+      productId,
+      productName,
+      vendorItemId,
+      source
+    },
+    review: {
+      reviewId,
+      productId,
+      rating: Number(row.rating || 0),
+      rawText: reviewText,
+      createdAt,
+      source,
+      uniqueKey: `${productId}:${reviewId}`
+    }
+  };
 }
 
-function runIngestion() {
-  ensureSourceDir();
-  const db = loadDb();
-
-  const files = fs.readdirSync(SOURCE_DIR)
-    .filter((name) => name.endsWith(".csv"))
-    .sort();
-
+function ingestRows(db, rows) {
   let importedReviews = 0;
   let enqueued = 0;
-  const newlyProcessedFiles = [];
 
-  for (const fileName of files) {
-    if (db.ingestionState.processedFiles.includes(fileName)) {
+  for (const row of rows) {
+    const normalized = normalizeIncomingRow(row);
+    if (!normalized) {
       continue;
     }
 
-    const filePath = path.join(SOURCE_DIR, fileName);
-    const rows = parseCsvFile(filePath);
+    upsertProduct(db, normalized.product);
 
-    for (const row of rows) {
-      const productId = row.product_id || row.productId;
-      if (!productId) {
-        continue;
-      }
-
-      upsertProduct(db, {
-        productId: String(productId),
-        productName: row.product_name || row.productName || `product-${productId}`,
-        vendorItemId: row.vendor_item_id || row.vendorItemId || "",
-        source: row.source || "csv"
-      });
-
-      const createdAt = row.created_at || row.createdAt || new Date().toISOString();
-      const reviewText = row.review_text || row.reviewText || "";
-      const reviewId = row.review_id || row.reviewId || makeReviewId(productId, reviewText, createdAt);
-      const uniqueKey = `${productId}:${reviewId}`;
-
-      const inserted = insertReview(db, {
-        reviewId,
-        productId: String(productId),
-        rating: Number(row.rating || 0),
-        rawText: reviewText,
-        createdAt,
-        source: row.source || "csv",
-        uniqueKey
-      });
-
-      if (!inserted) {
-        continue;
-      }
-
-      importedReviews += 1;
-      enqueue({
-        type: "review.created",
-        reviewId,
-        productId: String(productId),
-        createdAt,
-        source: row.source || "csv"
-      });
-      enqueued += 1;
+    const inserted = insertReview(db, normalized.review);
+    if (!inserted) {
+      continue;
     }
 
-    db.ingestionState.processedFiles.push(fileName);
-    newlyProcessedFiles.push(fileName);
+    importedReviews += 1;
+    enqueue({
+      type: "review.created",
+      reviewId: normalized.review.reviewId,
+      productId: normalized.review.productId,
+      createdAt: normalized.review.createdAt,
+      source: normalized.review.source
+    });
+    enqueued += 1;
+  }
+
+  return { importedReviews, enqueued };
+}
+
+function ensureIngestionState(db) {
+  if (!db.ingestionState) {
+    db.ingestionState = { processedFiles: [] };
+  }
+
+  if (!Array.isArray(db.ingestionState.processedFiles)) {
+    db.ingestionState.processedFiles = [];
+  }
+}
+
+async function runCsvSource(db) {
+  const csvData = loadCsvRows(db);
+  const result = ingestRows(db, csvData.rows);
+
+  db.ingestionState.processedFiles.push(...csvData.processedFiles);
+
+  return {
+    source: "csv",
+    scannedFiles: csvData.scannedFiles,
+    processedFiles: csvData.processedFiles,
+    importedReviews: result.importedReviews,
+    enqueued: result.enqueued
+  };
+}
+
+async function runCoupangSource(db) {
+  const cp = await loadCoupangRows(db);
+  const result = ingestRows(db, cp.rows);
+
+  db.ingestionState.lastCoupangRunAt = new Date().toISOString();
+
+  return {
+    source: "coupang",
+    mode: cp.mode,
+    productTargets: cp.productTargets,
+    fetchedRows: cp.rows.length,
+    importedReviews: result.importedReviews,
+    enqueued: result.enqueued
+  };
+}
+
+async function runIngestion(options = {}) {
+  const requestedSource = String(options.source || "csv").toLowerCase();
+  const source = ["csv", "coupang", "all"].includes(requestedSource) ? requestedSource : "csv";
+
+  const db = loadDb();
+  ensureIngestionState(db);
+
+  const summaries = [];
+
+  if (source === "csv" || source === "all") {
+    summaries.push(await runCsvSource(db));
+  }
+
+  if (source === "coupang" || source === "all") {
+    summaries.push(await runCoupangSource(db));
   }
 
   saveDb(db);
 
+  const totals = summaries.reduce((acc, row) => ({
+    importedReviews: acc.importedReviews + Number(row.importedReviews || 0),
+    enqueued: acc.enqueued + Number(row.enqueued || 0)
+  }), { importedReviews: 0, enqueued: 0 });
+
   return {
-    scannedFiles: files.length,
-    processedFiles: newlyProcessedFiles,
-    importedReviews,
-    enqueued
+    source,
+    totals,
+    summaries
   };
 }
 

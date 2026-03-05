@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "api:start": "node backend/api-server.js",
-    "ingest:run": "node backend/ingestion-service.js",
+    "ingest:run": "node backend/ingestion-service.js --source=csv",
+    "ingest:coupang": "node backend/ingestion-service.js --source=coupang",
+    "ingest:all": "node backend/ingestion-service.js --source=all",
     "worker:run": "node worker/filter-worker.js",
     "seed:sample": "node scripts/seed-sample-data.js",
     "pipeline:run": "npm run ingest:run && npm run worker:run",
