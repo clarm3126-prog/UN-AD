@@ -111,7 +111,7 @@ def _click_first_visible(page, selectors: List[str], delay_sec: float) -> bool:
     return False
 
 
-def _open_review_section(page, delay_sec: float) -> None:
+def _open_review_section(page, delay_sec: float, debug: bool = False) -> None:
     # 상단 탭/앵커로 리뷰 영역 진입 시도
     opened = _click_first_visible(
         page,
@@ -129,11 +129,26 @@ def _open_review_section(page, delay_sec: float) -> None:
 
     if not opened:
         # 탭 클릭 실패 시 리뷰 섹션까지 스크롤 유도
-        for _ in range(6):
+        for _ in range(16):
             page.mouse.wheel(0, 1800)
             time.sleep(delay_sec * 0.7)
             if page.locator("[class*='sdp-review']").count() > 0:
                 break
+    else:
+        try:
+            page.wait_for_selector("[class*='sdp-review'], [data-review-id]", timeout=8000)
+        except Exception:
+            pass
+
+    if debug:
+        try:
+            review_root_count = page.locator("[class*='sdp-review']").count()
+            review_card_count = page.locator("[data-review-id], article[class*='review']").count()
+            print(
+                f"[debug] review section check: root={review_root_count}, card={review_card_count}, opened_by_click={opened}"
+            )
+        except Exception:
+            pass
 
 
 def _set_low_rating_sort(page, delay_sec: float) -> None:
@@ -215,10 +230,19 @@ def _extract_rows_from_dom(page) -> List[Dict[str, object]]:
 
             const reviewText = pickText(card, [
               ".sdp-review__article__list__review__content",
+              ".sdp-review__article__list__review__content.js_reviewArticleContent",
+              "[data-review-content]",
               "[class*='review__content']",
               "[class*='review-content']",
               "[class*='content']"
             ]);
+
+            const reviewTextFallback =
+              reviewText ||
+              (card.innerText || "")
+                .replace(/\s+/g, " ")
+                .replace(/도움이 돼요\s*\d*/g, "")
+                .trim();
 
             const helpful = pickText(card, [
               "button:has-text('도움')",
@@ -231,7 +255,7 @@ def _extract_rows_from_dom(page) -> List[Dict[str, object]]:
               rating,
               created_at: createdAt,
               option,
-              review_text: reviewText,
+              review_text: reviewTextFallback,
               helpful
             };
           });
@@ -246,6 +270,9 @@ def crawl_coupang_reviews(
     headless: bool,
     delay_sec: float,
     max_rounds: int,
+    user_data_dir: Optional[str] = None,
+    prepare_session: bool = False,
+    debug: bool = False,
 ) -> List[ReviewRow]:
     try:
         from playwright.sync_api import TimeoutError as PWTimeoutError  # type: ignore
@@ -260,30 +287,63 @@ def crawl_coupang_reviews(
     rows: List[ReviewRow] = []
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        context = browser.new_context(
-            locale="ko-KR",
-            viewport={"width": 1440, "height": 1080},
-            user_agent=(
+        launch_options = {
+            "headless": headless,
+            "locale": "ko-KR",
+            "viewport": {"width": 1440, "height": 1080},
+            "user_agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/126.0.0.0 Safari/537.36"
             ),
-        )
-        page = context.new_page()
+            "args": ["--disable-blink-features=AutomationControlled"],
+        }
+
+        if user_data_dir:
+            Path(user_data_dir).mkdir(parents=True, exist_ok=True)
+            context = p.chromium.launch_persistent_context(user_data_dir, **launch_options)
+        else:
+            browser = p.chromium.launch(headless=headless, args=["--disable-blink-features=AutomationControlled"])
+            context = browser.new_context(
+                locale="ko-KR",
+                viewport={"width": 1440, "height": 1080},
+                user_agent=launch_options["user_agent"],
+            )
+
+        page = context.pages[0] if context.pages else context.new_page()
         page.set_default_timeout(20000)
 
         page.goto(product_url, wait_until="domcontentloaded")
         time.sleep(delay_sec)
 
+        if prepare_session:
+            print("[session] 브라우저에서 쿠팡 로그인/인증을 완료한 뒤 Enter를 누르세요.")
+            try:
+                input()
+            except EOFError:
+                pass
+            page.goto(product_url, wait_until="domcontentloaded")
+            time.sleep(delay_sec)
+
         product_name = _normalize_space(page.locator("h1").first.inner_text()) if page.locator("h1").count() else ""
 
-        _open_review_section(page, delay_sec)
+        if debug:
+            try:
+                title = _normalize_space(page.title())
+                body_preview = (
+                    _normalize_space(page.locator("body").inner_text()[:220]) if page.locator("body").count() else ""
+                )
+                print(f"[debug] title: {title}")
+                print(f"[debug] body-preview: {body_preview}")
+            except Exception:
+                pass
+
+        _open_review_section(page, delay_sec, debug=debug)
         _set_low_rating_sort(page, delay_sec)
 
         idle_rounds = 0
 
-        for _ in range(max_rounds):
+        for round_no in range(max_rounds):
             extracted = _extract_rows_from_dom(page)
 
             new_count = 0
@@ -301,6 +361,11 @@ def crawl_coupang_reviews(
                 new_count += 1
                 if len(rows) >= max_reviews:
                     break
+
+            if debug:
+                print(
+                    f"[debug] round={round_no + 1}/{max_rounds}, extracted={len(extracted)}, new={new_count}, total={len(rows)}"
+                )
 
             if len(rows) >= max_reviews:
                 break
@@ -337,7 +402,7 @@ def crawl_coupang_reviews(
             if idle_rounds >= 6 and not clicked_more:
                 break
 
-        browser.close()
+        context.close()
 
     return rows[:max_reviews]
 
@@ -383,6 +448,18 @@ def main() -> None:
     parser.add_argument("--headless", action="store_true", default=False)
     parser.add_argument("--delay-sec", type=float, default=1.0)
     parser.add_argument("--max-rounds", type=int, default=40)
+    parser.add_argument("--debug", action="store_true", default=False, help="디버그 로그 출력")
+    parser.add_argument(
+        "--user-data-dir",
+        default="",
+        help="Playwright persistent context 디렉터리(로그인 세션 재사용)",
+    )
+    parser.add_argument(
+        "--prepare-session",
+        action="store_true",
+        default=False,
+        help="실행 중 로그인/인증을 먼저 완료한 뒤 이어서 크롤링",
+    )
     parser.add_argument(
         "--out",
         default="data/source/reviews/coupang_reviews.csv",
@@ -397,6 +474,9 @@ def main() -> None:
         headless=bool(args.headless),
         delay_sec=max(0.2, args.delay_sec),
         max_rounds=max(5, args.max_rounds),
+        user_data_dir=(args.user_data_dir.strip() or None),
+        prepare_session=bool(args.prepare_session),
+        debug=bool(args.debug),
     )
 
     out_file, count = save_rows(rows, Path(args.out))
