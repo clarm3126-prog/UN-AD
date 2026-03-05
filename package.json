@@ -1,10 +1,15 @@
 {
   "name": "un-ad",
   "version": "1.0.0",
-  "description": "A simple HTML/JS/CSS starter template",
+  "description": "Review filtering pipeline with ingestion, queue worker, and web UI",
   "main": "main.js",
   "scripts": {
     "start": "node server.js",
+    "api:start": "node backend/api-server.js",
+    "ingest:run": "node backend/ingestion-service.js",
+    "worker:run": "node worker/filter-worker.js",
+    "seed:sample": "node scripts/seed-sample-data.js",
+    "pipeline:run": "npm run ingest:run && npm run worker:run",
     "test": "echo \"No tests configured\""
   },
   "keywords": [],

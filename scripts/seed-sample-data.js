@@ -1,0 +1,17 @@
+const fs = require("fs");
+const path = require("path");
+
+const target = path.join(__dirname, "../data/source/reviews/seed_reviews_20260305.csv");
+
+const csv = [
+  "product_id,product_name,vendor_item_id,review_id,rating,created_at,review_text,source",
+  "131023672,해피바스 솝베리 클렌징 오일,4279191312,rv_seed_001,5,2026-03-05T05:00:00Z,체험단으로 제품 제공받아 작성합니다. 링크 타고 사면 쿠폰 줌! 무조건 사세요!!!,seed",
+  "131023672,해피바스 솝베리 클렌징 오일,4279191312,rv_seed_002,4,2026-03-05T05:10:00Z,배송은 하루 늦었지만 포장이 꼼꼼했고 일주일 써보니 세정력은 만족합니다.,seed",
+  "131023672,해피바스 솝베리 클렌징 오일,4279191317,rv_seed_003,3,2026-03-05T05:20:00Z,향은 좋은데 뚜껑 결합부가 조금 아쉽고 재구매는 고민됩니다.,seed",
+  "999000111,샘플 상품 B,VITM_1,rv_seed_004,5,2026-03-05T05:30:00Z,인생템 역대급 완전 추천 꼭 사세요!!!,seed",
+  "999000111,샘플 상품 B,VITM_1,rv_seed_005,4,2026-03-05T05:40:00Z,한달 사용했고 소음이 작아 밤에 사용하기 좋았습니다.,seed"
+].join("\n");
+
+fs.mkdirSync(path.dirname(target), { recursive: true });
+fs.writeFileSync(target, csv, "utf8");
+console.log(`seed file created: ${target}`);
