@@ -23,6 +23,19 @@ npm start
 - 웹 UI: `http://localhost:3000`
 - API: `http://localhost:4000`
 
+## 스모크 점검(권장)
+
+```bash
+npm run smoke:check
+```
+
+`seed -> ingest+worker -> api health/products`를 한 번에 검증합니다.  
+도커 크롤러까지 확인하려면:
+
+```bash
+RUN_DOCKER_CRAWLER=1 npm run smoke:check
+```
+
 ## API 예시
 
 - `GET /products`

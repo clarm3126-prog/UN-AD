@@ -12,6 +12,7 @@
     "worker:run": "node worker/filter-worker.js",
     "seed:sample": "node scripts/seed-sample-data.js",
     "crawl:template": "node scripts/crawl-coupang-template.js",
+    "smoke:check": "bash scripts/smoke_check.sh",
     "pipeline:run": "npm run ingest:run && npm run worker:run",
     "test": "echo \"No tests configured\""
   },
