@@ -14,7 +14,8 @@
     "crawl:template": "node scripts/crawl-coupang-template.js",
     "smoke:check": "bash scripts/smoke_check.sh",
     "pipeline:run": "npm run ingest:run && npm run worker:run",
-    "test": "echo \"No tests configured\""
+    "test": "echo \"No tests configured\"",
+    "deploy:web": "bash scripts/deploy_firebase_hosting.sh"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,23 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "backend/**",
+      "worker/**",
+      "scripts/**",
+      "docker/**",
+      "data/**",
+      "extension/**",
+      "README.md",
+      "GEMINI.md",
+      "firebase-debug.log",
+      "package*.json"
+    ],
+    "rewrites": [
+      { "source": "**", "destination": "/index.html" }
+    ]
+  }
+}

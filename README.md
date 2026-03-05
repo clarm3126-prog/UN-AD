@@ -189,3 +189,16 @@ scripts/run_crawler_docker.sh --max-reviews 200 --headless --out data/source/rev
 - `pip install playwright`
 - `python -m playwright install chromium`
 - (xlsx 저장 시) `pip install pandas openpyxl`
+
+## 배포(Firebase Hosting)
+
+정적 웹(`index.html`, `main.js`, `style.css`) 배포:
+
+```bash
+FIREBASE_PROJECT_ID=<your-project-id> npm run deploy:web
+```
+
+사전 조건:
+- `npm i -g firebase-tools`로 Firebase CLI 설치
+- `firebase login` 완료
+- Firebase 프로젝트에 Hosting 활성화
